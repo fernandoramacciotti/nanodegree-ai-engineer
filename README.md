@@ -1,1 +1,1 @@
-Artificial Intelligence Nanodegre
+Artificial Intelligence Nanodegree
