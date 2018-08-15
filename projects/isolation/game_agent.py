@@ -116,7 +116,7 @@ def custom_score_3(game, player):
     own_moves = len(game.get_legal_moves(player))
     opp_moves = len(game.get_legal_moves(game.get_opponent(player)))
 
-    return float(dist_opp*opp_moves - dist_own*own_moves)
+    return np.log(dist_own*own_moves + 1) - np.log(dist_opp*opp_moves + 1)
 
 class IsolationPlayer:
     """Base class for minimax and alphabeta agents -- this class is never
