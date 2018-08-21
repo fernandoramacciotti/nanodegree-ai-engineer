@@ -67,6 +67,18 @@ class SelectorBIC(ModelSelector):
     http://www2.imm.dtu.dk/courses/02433/doc/ch6_slides.pdf
     Bayesian information criteria: BIC = -2 * logL + p * logN
     """
+    # clarification on p calculation (https://discussions.udacity.com/t/number-of-parameters-bic-calculation/233235/8)
+    # number of free parameters: N*(N-1)
+    # number of emission params (based on diag cov): 2*N*M
+    # number of initial states: (N-1)
+    # where N: no_states and M: no_features   
+    def bic(self, n):
+        model = self.base_model(n)
+        logL = model.score(self.X, self.lengths)
+        logN = np.log(len(self.X))
+        p = n*(n-1) + 2 * self.X.shape[1] * n + (n-1)
+        bic = -2 * logL + p * logN
+        return bic, model
 
     def select(self):
         """ select the best model for self.this_word based on
@@ -76,8 +88,19 @@ class SelectorBIC(ModelSelector):
         """
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection based on BIC scores
-        raise NotImplementedError
+        best_score = float('inf')
+        best_model = None
+        for n in range(self.min_n_components, self.max_n_components+1):
+            try:
+                score, model = self.bic(n)
+                if score < best_score:
+                    best_score = score
+                    best_model = model
+            
+            except:
+                continue
+        
+        return best_model
 
 
 class SelectorDIC(ModelSelector):
@@ -93,8 +116,26 @@ class SelectorDIC(ModelSelector):
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection based on DIC scores
-        raise NotImplementedError
+        # objective: max likelihood
+        best_score = float('-inf')
+        best_model = None
+        for n in range(self.min_n_components, self.max_n_components+1):
+            try:
+                model = self.base_model(n)
+                score = model.score(self.X, self.lengths)
+                score_other = 0
+                for w in self.words:
+                    x_other, len_other = self.hwords[w]
+                    score_other += model.score(x_other, len_other)
+                dic = score - score_other / (len(self.words) - 1)
+                if dic > best_score:
+                    best_score = dic
+                    best_model = model
+            
+            except:
+                continue
+        
+        return best_model
 
 
 class SelectorCV(ModelSelector):
@@ -105,5 +146,34 @@ class SelectorCV(ModelSelector):
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection using CV
-        raise NotImplementedError
+         # objective: max likelihood
+        best_cv_score = float('-inf')
+        best_model = None
+        for n in range(self.min_n_components, self.max_n_components+1):
+            try:
+                cv_scores = []
+                if len(self.sequences) >= 3: # enough data to fold split
+                    for train_cv, test_cv in KFold(n_splits=3).split(self.sequences):
+                        X_train, len_train = combine_sequences(train_cv, self.sequences)
+                        X_test, len_test = combine_sequences(test_cv, self.sequences)
+                        model = GaussianHMM(
+                            n_components=n, covariance_type="diag", n_iter=1000,
+                            random_state=self.random_state, verbose=False).fit(X_train, len_train)
+                        cv_scores.append(model.score(X_test, len_test))
+                    cv = np.mean(cv_scores)
+                    if cv > best_cv_score:
+                        best_cv_score = cv
+                        best_model = model
+                
+                else:
+                    model = self.base_model(n)
+                    cv = model.score(self.X, self.lengths)
+                    if cv > best_cv_score:
+                        best_cv_score = cv
+                        best_model = model
+
+            except:
+                continue
+
+        return best_model
+
